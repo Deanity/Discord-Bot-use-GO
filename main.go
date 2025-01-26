@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -81,7 +82,7 @@ func onReady(s *discordgo.Session, event *discordgo.Ready) {
 	commands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "create-webhook",
-			Description: "Create a webhook in this channel.",
+			Description: "Create a webhook in a specific channel.",
 		},
 		{
 			Name:        "list-webhooks",
@@ -111,9 +112,58 @@ func onInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	webhookName := "DefaultWebhookName"
+	options := i.ApplicationCommandData().Options
+	var channelID, channelName, webhookName string
 
-	webhook, err := s.WebhookCreate(i.ChannelID, webhookName, "")
+	// Default values
+	channelID = i.ChannelID
+	webhookName = "DefaultWebhookName"
+
+	// Parse options
+	if len(options) > 0 {
+		for _, opt := range options {
+			if opt.Name == "channel" {
+				channelName = opt.Value.(string)
+
+				// Find channel by name
+				channels, err := s.GuildChannels(i.GuildID)
+				if err != nil {
+					s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Content: fmt.Sprintf("❌ Failed to get channels: %v", err),
+							Flags:   discordgo.MessageFlagsEphemeral,
+						},
+					})
+					return
+				}
+
+				for _, channel := range channels {
+					if strings.ToLower(channel.Name) == strings.ToLower(channelName) {
+						channelID = channel.ID
+						channelName = channel.Name
+						break
+					}
+				}
+
+				if channelID == "" {
+					s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Content: "❌ Channel not found.",
+							Flags:   discordgo.MessageFlagsEphemeral,
+						},
+					})
+					return
+				}
+			} else if opt.Name == "name" {
+				webhookName = opt.Value.(string)
+			}
+		}
+	}
+
+	// Create webhook
+	webhook, err := s.WebhookCreate(channelID, webhookName, "")
 	if err != nil {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -125,9 +175,11 @@ func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	// Save webhook data
 	webhookData := WebhookData{
 		GuildID:      i.GuildID,
-		ChannelID:    i.ChannelID,
+		ChannelID:    channelID,
+		ChannelName:  channelName,
 		WebhookID:    webhook.ID,
 		WebhookName:  webhook.Name,
 		WebhookToken: webhook.Token,
@@ -148,7 +200,7 @@ func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Webhook Created",
-		Description: fmt.Sprintf("✅ Webhook created successfully: **%s**", webhook.Name),
+		Description: fmt.Sprintf("✅ Webhook created successfully in channel <#%s>: **%s**", channelID, webhook.Name),
 		Color:       0x00FF00,
 		Fields: []*discordgo.MessageEmbedField{
 			{
