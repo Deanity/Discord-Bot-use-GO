@@ -148,7 +148,7 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Webhook Link",
-				Value:  fmt.Sprintf("[Click here to access webhook](https://discord.com/api/webhooks/%s/%s)", webhook.ID, webhook.Token),
+				Value:  fmt.Sprintf("https://discord.com/api/webhooks/%s/%s", webhook.ID, webhook.Token),
 				Inline: false,
 			},
 		},
