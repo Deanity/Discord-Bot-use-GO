@@ -126,7 +126,7 @@ func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			Fields: []*discordgo.MessageEmbedField{
 				{
 					Name:   "Tutorial Webhook",
-					Value:  "Invite Bot <a:live~1:1247888274161143878>",
+					Value:  "Invite Bot <a:live:1247888274161143878> <a:panah:1333099217404821597> <@1331944037908742205>",
 					Inline: false,
 				},
 			},
