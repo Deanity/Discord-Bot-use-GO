@@ -87,7 +87,7 @@ func onReady(s *discordgo.Session, event *discordgo.Ready) {
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "webhook_name",
+					Name:        "name",
 					Description: "Name of the webhook",
 					Required:    false,
 				},
