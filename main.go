@@ -111,7 +111,7 @@ func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 // Create webhook command
 func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 	args := strings.Split(m.Content, " ")
-	webhookName := "DefaultWebhookName"
+	webhookName := "BooKece"
 	if len(args) > 1 {
 		webhookName = args[1]
 	}
