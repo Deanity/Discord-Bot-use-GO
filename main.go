@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
+	// "strings"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	discordTokenEnv   = "DISCORD_TOKEN"
-	mongoURIEnv       = "MONGO_URI"
-	webhooksDatabase  = "webhooksDB"
+	discordTokenEnv    = "DISCORD_TOKEN"
+	mongoURIEnv        = "MONGO_URI"
+	webhooksDatabase   = "webhooksDB"
 	webhooksCollection = "webhooks"
 )
 
@@ -60,8 +60,9 @@ func main() {
 		log.Fatalf("Error creating Discord session: %v", err)
 	}
 
+	// Register slash commands
 	dg.AddHandler(onReady)
-	dg.AddHandler(onMessageCreate)
+	dg.AddHandler(onInteractionCreate)
 
 	err = dg.Open()
 	if err != nil {
@@ -79,37 +80,57 @@ func main() {
 
 func onReady(s *discordgo.Session, event *discordgo.Ready) {
 	log.Printf("Bot is ready! Logged in as %s", event.User.Username)
+
+	// Register slash commands
+	commands := []*discordgo.ApplicationCommand{
+		{
+			Name:        "create-webhook",
+			Description: "Create a new webhook in this channel",
+		},
+		{
+			Name:        "list-webhooks",
+			Description: "List all webhooks in this server",
+		},
+	}
+
+	for _, cmd := range commands {
+		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", cmd)
+		if err != nil {
+			log.Fatalf("Failed to register command %s: %v", cmd.Name, err)
+		}
+	}
 }
 
-func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.Bot {
+func onInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type != discordgo.InteractionApplicationCommand {
 		return
 	}
 
-	if strings.HasPrefix(m.Content, "!create-webhook") {
-		createWebhook(s, m)
-	} else if strings.HasPrefix(m.Content, "!list-webhooks") {
-		listWebhooks(s, m)
+	switch i.ApplicationCommandData().Name {
+	case "create-webhook":
+		createWebhook(s, i)
+	case "list-webhooks":
+		listWebhooks(s, i)
 	}
 }
 
-func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
-	args := strings.Split(m.Content, " ")
+func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	webhookName := "BooKece"
-	if len(args) > 1 {
-		webhookName = args[1]
+	options := i.ApplicationCommandData().Options
+	if len(options) > 0 {
+		webhookName = options[0].StringValue()
 	}
 
-	webhook, err := s.WebhookCreate(m.ChannelID, webhookName, "")
+	webhook, err := s.WebhookCreate(i.ChannelID, webhookName, "")
 	if err != nil {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("❌ Failed to create webhook: %v", err))
+		sendEphemeralMessage(s, i, fmt.Sprintf("❌ Failed to create webhook: %v", err))
 		return
 	}
 
 	webhookData := WebhookData{
-		GuildID:      m.GuildID,
+		GuildID:      i.GuildID,
 		GuildName:    "Unknown Guild", // Replace with actual guild name if available
-		ChannelID:    m.ChannelID,
+		ChannelID:    i.ChannelID,
 		ChannelName:  "Unknown Channel", // Replace with actual channel name if available
 		WebhookID:    webhook.ID,
 		WebhookName:  webhook.Name,
@@ -119,7 +140,7 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 	collection := mongoClient.Database(webhooksDatabase).Collection(webhooksCollection)
 	_, err = collection.InsertOne(context.TODO(), webhookData)
 	if err != nil {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("❌ Failed to save webhook to database: %v", err))
+		sendEphemeralMessage(s, i, fmt.Sprintf("❌ Failed to save webhook to database: %v", err))
 		return
 	}
 
@@ -135,26 +156,32 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 			},
 		},
 	}
-	s.ChannelMessageSendEmbed(m.ChannelID, embed)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:   []*discordgo.MessageEmbed{embed},
+			Flags:    discordgo.MessageFlagsEphemeral,
+		},
+	})
 }
 
-func listWebhooks(s *discordgo.Session, m *discordgo.MessageCreate) {
+func listWebhooks(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	collection := mongoClient.Database(webhooksDatabase).Collection(webhooksCollection)
-	cursor, err := collection.Find(context.TODO(), bson.M{"guild_id": m.GuildID})
+	cursor, err := collection.Find(context.TODO(), bson.M{"guild_id": i.GuildID})
 	if err != nil {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("❌ Failed to retrieve webhooks: %v", err))
+		sendEphemeralMessage(s, i, fmt.Sprintf("❌ Failed to retrieve webhooks: %v", err))
 		return
 	}
 	defer cursor.Close(context.TODO())
 
 	var webhooks []WebhookData
 	if err = cursor.All(context.TODO(), &webhooks); err != nil {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("❌ Failed to parse webhooks: %v", err))
+		sendEphemeralMessage(s, i, fmt.Sprintf("❌ Failed to parse webhooks: %v", err))
 		return
 	}
 
 	if len(webhooks) == 0 {
-		s.ChannelMessageSend(m.ChannelID, "🔍 No webhooks found for this server.")
+		sendEphemeralMessage(s, i, "🔍 No webhooks found for this server.")
 		return
 	}
 
@@ -171,5 +198,21 @@ func listWebhooks(s *discordgo.Session, m *discordgo.MessageCreate) {
 		})
 	}
 
-	s.ChannelMessageSendEmbed(m.ChannelID, embed)
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:   []*discordgo.MessageEmbed{embed},
+			Flags:    discordgo.MessageFlagsEphemeral,
+		},
+	})
+}
+
+func sendEphemeralMessage(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: message,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
 }
