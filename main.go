@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	// "strings"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -60,9 +59,9 @@ func main() {
 		log.Fatalf("Error creating Discord session: %v", err)
 	}
 
-	// Register slash commands
 	dg.AddHandler(onReady)
 	dg.AddHandler(onInteractionCreate)
+	dg.AddHandler(onMessageCreate)
 
 	err = dg.Open()
 	if err != nil {
@@ -81,7 +80,6 @@ func main() {
 func onReady(s *discordgo.Session, event *discordgo.Ready) {
 	log.Printf("Bot is ready! Logged in as %s", event.User.Username)
 
-	// Register slash commands
 	commands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "create-webhook",
@@ -114,6 +112,30 @@ func onInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 }
 
+func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.Author.ID == s.State.User.ID {
+		return
+	}
+
+	if m.Content == "tutorwebhook" {
+		s.ChannelMessageSendEmbed(m.ChannelID, &discordgo.MessageEmbed{
+			Title:       "Tutor Webhook Detected!",
+			Description: "Here is the information related to the tutor webhook you requested:",
+			Color:       0x3498DB,
+			Image: &discordgo.MessageEmbedImage{
+				URL: "https://cdn.discordapp.com/attachments/1282966917430120516/1333083736899715152/Teks_paragraf_Anda_3.jpg?ex=67979a7a&is=679648fa&hm=9b3092585494d47bccba7a9b92d2a6b2ec7ca0524a5a6e41eb55d00d21661eaf&",
+			},
+			Fields: []*discordgo.MessageEmbedField{
+				{
+					Name:   "Description",
+					Value:  "This is a tutor webhook demonstration for detecting specific keywords and responding accordingly.",
+					Inline: false,
+				},
+			},
+		})
+	}
+}
+
 func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	webhookName := "BooKece"
 	options := i.ApplicationCommandData().Options
@@ -129,9 +151,9 @@ func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	webhookData := WebhookData{
 		GuildID:      i.GuildID,
-		GuildName:    "Unknown Guild", // Replace with actual guild name if available
+		GuildName:    "Unknown Guild",
 		ChannelID:    i.ChannelID,
-		ChannelName:  "Unknown Channel", // Replace with actual channel name if available
+		ChannelName:  "Unknown Channel",
 		WebhookID:    webhook.ID,
 		WebhookName:  webhook.Name,
 		WebhookToken: webhook.Token,
@@ -159,8 +181,8 @@ func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds:   []*discordgo.MessageEmbed{embed},
-			Flags:    discordgo.MessageFlagsEphemeral,
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Flags:  discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
@@ -201,8 +223,8 @@ func listWebhooks(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds:   []*discordgo.MessageEmbed{embed},
-			Flags:    discordgo.MessageFlagsEphemeral,
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Flags:  discordgo.MessageFlagsEphemeral,
 		},
 	})
 }
