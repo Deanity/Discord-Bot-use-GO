@@ -16,7 +16,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Environment variables
 const (
 	discordTokenEnv   = "DISCORD_TOKEN"
 	mongoURIEnv       = "MONGO_URI"
@@ -24,10 +23,8 @@ const (
 	webhooksCollection = "webhooks"
 )
 
-// MongoDB Client
 var mongoClient *mongo.Client
 
-// Struct for webhook data
 type WebhookData struct {
 	GuildID      string `bson:"guild_id"`
 	GuildName    string `bson:"guild_name"`
@@ -39,13 +36,11 @@ type WebhookData struct {
 }
 
 func main() {
-	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	// Load environment variables
 	discordToken := os.Getenv(discordTokenEnv)
 	mongoURI := os.Getenv(mongoURIEnv)
 
@@ -53,27 +48,21 @@ func main() {
 		log.Fatalf("Missing environment variables: %s or %s", discordTokenEnv, mongoURIEnv)
 	}
 
-	// Connect to MongoDB
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoURI))
 	if err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
-	mongoClient = client // Set the mongoClient variable
-
-	// Ensure the MongoDB client disconnects when the program exits
+	mongoClient = client
 	defer mongoClient.Disconnect(context.TODO())
 
-	// Create a new Discord session
 	dg, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
 		log.Fatalf("Error creating Discord session: %v", err)
 	}
 
-	// Add event handlers
 	dg.AddHandler(onReady)
 	dg.AddHandler(onMessageCreate)
 
-	// Open the websocket and begin listening
 	err = dg.Open()
 	if err != nil {
 		log.Fatalf("Error opening Discord session: %v", err)
@@ -81,7 +70,6 @@ func main() {
 	defer dg.Close()
 
 	log.Println("Bot is now running. Press CTRL+C to exit.")
-	// Wait for CTRL+C or other interrupt signals to exit
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
@@ -89,18 +77,15 @@ func main() {
 	log.Println("Shutting down bot.")
 }
 
-// Event handler: Bot ready
 func onReady(s *discordgo.Session, event *discordgo.Ready) {
 	log.Printf("Bot is ready! Logged in as %s", event.User.Username)
 }
 
-// Event handler: Message create
 func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.Bot {
 		return
 	}
 
-	// Handle commands
 	if strings.HasPrefix(m.Content, "!create-webhook") {
 		createWebhook(s, m)
 	} else if strings.HasPrefix(m.Content, "!list-webhooks") {
@@ -108,7 +93,6 @@ func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
-// Create webhook command
 func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 	args := strings.Split(m.Content, " ")
 	webhookName := "BooKece"
@@ -124,15 +108,14 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	webhookData := WebhookData{
 		GuildID:      m.GuildID,
-		GuildName:    m.GuildID, // Replace with GuildName if needed
+		GuildName:    "Unknown Guild", // Replace with actual guild name if available
 		ChannelID:    m.ChannelID,
-		ChannelName:  m.ChannelID, // Replace with ChannelName if needed
+		ChannelName:  "Unknown Channel", // Replace with actual channel name if available
 		WebhookID:    webhook.ID,
 		WebhookName:  webhook.Name,
 		WebhookToken: webhook.Token,
 	}
 
-	// Access MongoDB collection
 	collection := mongoClient.Database(webhooksDatabase).Collection(webhooksCollection)
 	_, err = collection.InsertOne(context.TODO(), webhookData)
 	if err != nil {
@@ -140,11 +123,10 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Send success message with embed including the link
 	embed := &discordgo.MessageEmbed{
 		Title:       "Webhook Created",
 		Description: fmt.Sprintf("✅ Webhook created successfully: **%s**", webhook.Name),
-		Color:       0x00FF00, // Green color for success
+		Color:       0x00FF00,
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Webhook Link",
@@ -153,13 +135,10 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 			},
 		},
 	}
- 
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 }
 
-// List webhooks command
 func listWebhooks(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Access MongoDB collection
 	collection := mongoClient.Database(webhooksDatabase).Collection(webhooksCollection)
 	cursor, err := collection.Find(context.TODO(), bson.M{"guild_id": m.GuildID})
 	if err != nil {
@@ -179,10 +158,9 @@ func listWebhooks(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Create an embed message
 	embed := &discordgo.MessageEmbed{
 		Title: "Webhooks List",
-		Color: 0x00FF00, // Green color for success
+		Color: 0x00FF00,
 	}
 
 	for _, webhook := range webhooks {
@@ -193,6 +171,5 @@ func listWebhooks(s *discordgo.Session, m *discordgo.MessageCreate) {
 		})
 	}
 
-	// Send the embed message
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 }
