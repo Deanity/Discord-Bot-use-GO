@@ -84,6 +84,14 @@ func onReady(s *discordgo.Session, event *discordgo.Ready) {
 		{
 			Name:        "create-webhook",
 			Description: "Create a new webhook in this channel",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "webhook_name",
+					Description: "Name of the webhook",
+					Required:    false,
+				},
+			},
 		},
 		{
 			Name:        "list-webhooks",
@@ -135,18 +143,23 @@ func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Default nama webhook
 	webhookName := "BooKece"
+
+	// Mengambil input nama webhook dari opsi (jika ada)
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 {
 		webhookName = options[0].StringValue()
 	}
 
+	// Membuat webhook baru
 	webhook, err := s.WebhookCreate(i.ChannelID, webhookName, "")
 	if err != nil {
 		sendEphemeralMessage(s, i, fmt.Sprintf("❌ Failed to create webhook: %v", err))
 		return
 	}
 
+	// Menyimpan data webhook ke MongoDB
 	webhookData := WebhookData{
 		GuildID:      i.GuildID,
 		GuildName:    "Unknown Guild",
@@ -164,6 +177,7 @@ func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	// Mengirimkan respon sukses dengan detail webhook
 	embed := &discordgo.MessageEmbed{
 		Title:       "Webhook Created",
 		Description: fmt.Sprintf("✅ Webhook created successfully: **%s**", webhook.Name),
