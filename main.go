@@ -121,7 +121,7 @@ func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		s.ChannelMessageSendEmbed(m.ChannelID, &discordgo.MessageEmbed{
 			Color:       0x3498DB,
 			Image: &discordgo.MessageEmbedImage{
-				URL: "https://cdn.discordapp.com/attachments/1282966917430120516/1333095135772151908/Teks_paragraf_Anda_5.png?ex=6797a518&is=67965398&hm=9a18190cea073e790011ab2cd92c73a41940866f2f2fbef1edd2e108eeb3fb12&",
+				URL: "https://cdn.discordapp.com/attachments/1282966917430120516/1333097030666682389/Teks_paragraf_Anda_6.png?ex=6797a6db&is=6796555b&hm=825c7475ff579ac606a9a6309d31d8250c34f5b206d9225336b9877242d8c321&",
 			},
 			Fields: []*discordgo.MessageEmbedField{
 				{
