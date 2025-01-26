@@ -140,7 +140,14 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("✅ Webhook created: %s", webhook))
+	// Send success message with embed
+	embed := &discordgo.MessageEmbed{
+		Title:       "Webhook Created",
+		Description: fmt.Sprintf("✅ Webhook created successfully: **%s**", webhook.Name),
+		Color:       0x00FF00, // Green color for success
+	}
+
+	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 }
 
 // List webhooks command
@@ -165,10 +172,20 @@ func listWebhooks(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	var response string
-	for _, webhook := range webhooks {
-		response += fmt.Sprintf("**%s**: [Link](https://discord.com/api/webhooks/%s/%s)\n", webhook.WebhookName, webhook.WebhookID, webhook.WebhookToken)
+	// Create an embed message
+	embed := &discordgo.MessageEmbed{
+		Title: "Webhooks List",
+		Color: 0x00FF00, // Green color for success
 	}
 
-	s.ChannelMessageSend(m.ChannelID, response)
+	for _, webhook := range webhooks {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   webhook.WebhookName,
+			Value:  fmt.Sprintf("[Link](https://discord.com/api/webhooks/%s/%s)", webhook.WebhookID, webhook.WebhookToken),
+			Inline: false,
+		})
+	}
+
+	// Send the embed message
+	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 }
