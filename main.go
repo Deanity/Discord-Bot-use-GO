@@ -2,21 +2,18 @@ package main
 
 import (
 	"context"
-	// "encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-	// "time"
 
 	"github.com/bwmarrin/discordgo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"github.com/joho/godotenv"
-	
 )
 
 // Environment variables
@@ -57,10 +54,13 @@ func main() {
 	}
 
 	// Connect to MongoDB
-	mongoClient, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoURI))
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoURI))
 	if err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
+	mongoClient = client // Set the mongoClient variable
+
+	// Ensure the MongoDB client disconnects when the program exits
 	defer mongoClient.Disconnect(context.TODO())
 
 	// Create a new Discord session
@@ -88,7 +88,6 @@ func main() {
 
 	log.Println("Shutting down bot.")
 }
-
 
 // Event handler: Bot ready
 func onReady(s *discordgo.Session, event *discordgo.Ready) {
@@ -133,6 +132,7 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 		WebhookToken: webhook.Token,
 	}
 
+	// Access MongoDB collection
 	collection := mongoClient.Database(webhooksDatabase).Collection(webhooksCollection)
 	_, err = collection.InsertOne(context.TODO(), webhookData)
 	if err != nil {
@@ -145,6 +145,7 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 // List webhooks command
 func listWebhooks(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Access MongoDB collection
 	collection := mongoClient.Database(webhooksDatabase).Collection(webhooksCollection)
 	cursor, err := collection.Find(context.TODO(), bson.M{"guild_id": m.GuildID})
 	if err != nil {
