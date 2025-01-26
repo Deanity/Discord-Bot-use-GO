@@ -121,12 +121,12 @@ func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		s.ChannelMessageSendEmbed(m.ChannelID, &discordgo.MessageEmbed{
 			Color:       0x3498DB,
 			Image: &discordgo.MessageEmbedImage{
-				URL: "https://cdn.discordapp.com/attachments/1282966917430120516/1333083736899715152/Teks_paragraf_Anda_3.jpg?ex=67979a7a&is=679648fa&hm=9b3092585494d47bccba7a9b92d2a6b2ec7ca0524a5a6e41eb55d00d21661eaf&",
+				URL: "https://cdn.discordapp.com/attachments/1282966917430120516/1333095135772151908/Teks_paragraf_Anda_5.png?ex=6797a518&is=67965398&hm=9a18190cea073e790011ab2cd92c73a41940866f2f2fbef1edd2e108eeb3fb12&",
 			},
 			Fields: []*discordgo.MessageEmbedField{
 				{
 					Name:   "Tutorial Webhook",
-					Value:  "Invite Bot <a:live~1:1247888274161143878:>",
+					Value:  "Invite Bot <a:live~1:1247888274161143878>",
 					Inline: false,
 				},
 			},
