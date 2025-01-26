@@ -18,9 +18,9 @@ import (
 
 // Environment variables
 const (
-	discordTokenEnv  = "DISCORD_TOKEN"
-	mongoURIEnv      = "MONGO_URI"
-	webhooksDatabase = "webhooksDB"
+	discordTokenEnv   = "DISCORD_TOKEN"
+	mongoURIEnv       = "MONGO_URI"
+	webhooksDatabase  = "webhooksDB"
 	webhooksCollection = "webhooks"
 )
 
@@ -140,11 +140,18 @@ func createWebhook(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Send success message with embed
+	// Send success message with embed including the link
 	embed := &discordgo.MessageEmbed{
 		Title:       "Webhook Created",
 		Description: fmt.Sprintf("✅ Webhook created successfully: **%s**", webhook.Name),
 		Color:       0x00FF00, // Green color for success
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Webhook Link",
+				Value:  fmt.Sprintf("[Click here to access webhook](https://discord.com/api/webhooks/%s/%s)", webhook.ID, webhook.Token),
+				Inline: false,
+			},
+		},
 	}
 
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
