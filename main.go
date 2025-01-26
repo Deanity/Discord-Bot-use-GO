@@ -119,16 +119,14 @@ func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	if m.Content == "tutorwebhook" {
 		s.ChannelMessageSendEmbed(m.ChannelID, &discordgo.MessageEmbed{
-			Title:       "Tutor Webhook Detected!",
-			Description: "Here is the information related to the tutor webhook you requested:",
 			Color:       0x3498DB,
 			Image: &discordgo.MessageEmbedImage{
 				URL: "https://cdn.discordapp.com/attachments/1282966917430120516/1333083736899715152/Teks_paragraf_Anda_3.jpg?ex=67979a7a&is=679648fa&hm=9b3092585494d47bccba7a9b92d2a6b2ec7ca0524a5a6e41eb55d00d21661eaf&",
 			},
 			Fields: []*discordgo.MessageEmbedField{
 				{
-					Name:   "Description",
-					Value:  "This is a tutor webhook demonstration for detecting specific keywords and responding accordingly.",
+					Name:   "Tutorial Webhook",
+					Value:  "Invite Bot <a:live~1:1247888274161143878:>",
 					Inline: false,
 				},
 			},
