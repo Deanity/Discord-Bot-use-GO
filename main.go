@@ -13,16 +13,26 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"github.com/joho/godotenv"
+
 )
 
 const (
-	discordTokenEnv    = "DISCORD_TOKEN"
-	mongoURIEnv        = "MONGO_URI"
-	webhooksDatabase   = "webhooksDB"
+	discordTokenEnv   = "DISCORD_TOKEN"
+	mongoURIEnv       = "MONGO_URI"
+	serversDatabase   = "serverStatsDB"
+	serversCollection = "servers"
+	webhooksDatabase  = "webhooksDB"
 	webhooksCollection = "webhooks"
 )
 
 var mongoClient *mongo.Client
+
+type ServerData struct {
+	GuildID     string `bson:"guild_id"`
+	GuildName   string `bson:"guild_name"`
+	MemberCount int    `bson:"member_count"`
+	JoinedAt    string `bson:"joined_at"`
+}
 
 type WebhookData struct {
 	GuildID      string `bson:"guild_id"`
@@ -34,12 +44,25 @@ type WebhookData struct {
 	WebhookToken string `bson:"webhook_token"`
 }
 
+// sendEphemeralMessage mengirimkan pesan ephemeral ke user tertentu
+func sendEphemeralMessage(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: content,
+			Flags:   discordgo.MessageFlagsEphemeral, // Menandai pesan sebagai ephemeral
+		},
+	})
+	if err != nil {
+		log.Printf("Gagal mengirim pesan ephemeral: %v", err)
+	}
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-
 	discordToken := os.Getenv(discordTokenEnv)
 	mongoURI := os.Getenv(mongoURIEnv)
 
@@ -52,16 +75,19 @@ func main() {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	mongoClient = client
-	defer mongoClient.Disconnect(context.TODO())
-
+	defer func() {
+		if err := mongoClient.Disconnect(context.TODO()); err != nil {
+			log.Printf("Error disconnecting MongoDB: %v", err)
+		}
+	}()
 	dg, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
 		log.Fatalf("Error creating Discord session: %v", err)
 	}
-
 	dg.AddHandler(onReady)
+	dg.AddHandler(onGuildCreate)
+	dg.AddHandler(onGuildDelete)
 	dg.AddHandler(onInteractionCreate)
-	dg.AddHandler(onMessageCreate)
 
 	err = dg.Open()
 	if err != nil {
@@ -97,6 +123,10 @@ func onReady(s *discordgo.Session, event *discordgo.Ready) {
 			Name:        "list-webhooks",
 			Description: "List all webhooks in this server",
 		},
+		{
+			Name:        "server-stats",
+			Description: "Displays a list of servers where the bot is present.",
+		},
 	}
 
 	for _, cmd := range commands {
@@ -117,49 +147,61 @@ func onInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		createWebhook(s, i)
 	case "list-webhooks":
 		listWebhooks(s, i)
+	case "server-stats":
+		listServerStats(s, i)
+	default:
+		log.Printf("Unhandled command: %s", i.ApplicationCommandData().Name)
 	}
 }
 
-func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.ID == s.State.User.ID {
+func onGuildCreate(_ *discordgo.Session, event *discordgo.GuildCreate) {
+	if event.Guild.Unavailable {
 		return
 	}
 
-	if m.Content == "tutorwebhook" {
-		s.ChannelMessageSendEmbed(m.ChannelID, &discordgo.MessageEmbed{
-			Color:       0x3498DB,
-			Image: &discordgo.MessageEmbedImage{
-				URL: "https://cdn.discordapp.com/attachments/1282966917430120516/1333097030666682389/Teks_paragraf_Anda_6.png?ex=6797a6db&is=6796555b&hm=825c7475ff579ac606a9a6309d31d8250c34f5b206d9225336b9877242d8c321&",
-			},
-			Fields: []*discordgo.MessageEmbedField{
-				{
-					Name:   "Tutorial Webhook",
-					Value:  "Ikutin garis kuning dan anak panah \n Invite Bot <a:live:1247888274161143878> <a:panah:1333099217404821597> <@1331944037908742205>",
-					Inline: false,
-				},
-			},
-		})
+	collection := mongoClient.Database(serversDatabase).Collection(serversCollection)
+	serverData := ServerData{
+		GuildID:     event.Guild.ID,
+		GuildName:   event.Guild.Name,
+		MemberCount: event.Guild.MemberCount,
+		JoinedAt:    event.JoinedAt.String(),
 	}
+	_, err := collection.InsertOne(context.TODO(), serverData)
+	if err != nil {
+		log.Printf("Error saving server to database: %v", err)
+		return
+	}
+	log.Printf("Bot joined server: %s (%s)", event.Guild.Name, event.Guild.ID)
+}
+
+func onGuildDelete(_ *discordgo.Session, event *discordgo.GuildDelete) {
+	if event.Unavailable {
+		return
+	}
+
+	collection := mongoClient.Database(serversDatabase).Collection(serversCollection)
+	_, err := collection.DeleteOne(context.TODO(), bson.M{"guild_id": event.Guild.ID})
+	if err != nil {
+		log.Printf("Error removing server from database: %v", err)
+		return
+	}
+	log.Printf("Bot left server: %s (%s)", event.Guild.Name, event.Guild.ID)
 }
 
 func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Default nama webhook
 	webhookName := "BooKece"
 
-	// Mengambil input nama webhook dari opsi (jika ada)
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 {
 		webhookName = options[0].StringValue()
 	}
 
-	// Membuat webhook baru
 	webhook, err := s.WebhookCreate(i.ChannelID, webhookName, "")
 	if err != nil {
 		sendEphemeralMessage(s, i, fmt.Sprintf("❌ Failed to create webhook: %v", err))
 		return
 	}
 
-	// Menyimpan data webhook ke MongoDB
 	webhookData := WebhookData{
 		GuildID:      i.GuildID,
 		GuildName:    "Unknown Guild",
@@ -177,7 +219,6 @@ func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Mengirimkan respon sukses dengan detail webhook
 	embed := &discordgo.MessageEmbed{
 		Title:       "Webhook Created",
 		Description: fmt.Sprintf("✅ Webhook created successfully: **%s**", webhook.Name),
@@ -197,7 +238,9 @@ func createWebhook(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			Flags:  discordgo.MessageFlagsEphemeral,
 		},
 	})
+	log.Println("Webhook created successfully.")
 }
+
 
 func listWebhooks(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	collection := mongoClient.Database(webhooksDatabase).Collection(webhooksCollection)
@@ -236,17 +279,55 @@ func listWebhooks(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Embeds: []*discordgo.MessageEmbed{embed},
-			Flags:  discordgo.MessageFlagsEphemeral,
 		},
 	})
+	log.Println("Listed webhooks.")
 }
 
-func sendEphemeralMessage(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
+
+func listServerStats(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	collection := mongoClient.Database(serversDatabase).Collection(serversCollection)
+	cursor, err := collection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		log.Printf("Failed to retrieve server stats: %v", err)
+		return
+	}
+	defer cursor.Close(context.TODO())
+
+	var servers []ServerData
+	if err = cursor.All(context.TODO(), &servers); err != nil {
+		log.Printf("Failed to parse server stats: %v", err)
+		return
+	}
+
+	if len(servers) == 0 {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "No servers found in the database.",
+			},
+		})
+		return
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "Server Stats",
+		Color: 0x00FF00,
+	}
+
+	for _, server := range servers {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   server.GuildName,
+			Value:  fmt.Sprintf("ID: %s\nMembers: %d\nJoined: %s", server.GuildID, server.MemberCount, server.JoinedAt),
+			Inline: false,
+		})
+	}
+
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: message,
-			Flags:   discordgo.MessageFlagsEphemeral,
+			Embeds: []*discordgo.MessageEmbed{embed},
 		},
 	})
+	log.Println("Listed Server")
 }
